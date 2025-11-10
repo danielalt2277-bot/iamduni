@@ -62,6 +62,7 @@ def send_view(username, aweme_id, proxy=None):
         "Accept-Encoding": "gzip, deflate, br",
         "Connection": "keep-alive",
         "Upgrade-Insecure-Requests": "1",
+        "Referer": "https://www.tiktok.com/",
     })
     if proxy:
         session.proxies = {"http": proxy, "https": proxy}
@@ -78,6 +79,9 @@ def send_view(username, aweme_id, proxy=None):
             return True
         else:
             print(f"[-] Request failed with status code {resp.status_code} for proxy {proxy or 'direct'}")
+            with open("debug_response.html", "w", encoding="utf-8") as f:
+                f.write(resp.text)
+            print("[-] Wrote failing response to debug_response.html")
     except Exception as e:
         print(f"[-] An error occurred while sending a view with proxy {proxy or 'direct'}: {e}")
     return False
@@ -97,8 +101,13 @@ def main():
 
     proxies = get_proxies()
     if not proxies:
-        print("[!] No proxies configured. The script will run without proxies.")
-        print("[!] This may lead to rate limiting or blocking from TikTok.")
+        print("\n" + "="*50)
+        print("[WARNING] NO PROXIES CONFIGURED")
+        print("="*50)
+        print("The script is running without proxies. This sends all requests from your IP address.")
+        print("TikTok will quickly detect and block this, and the script will not work.")
+        print("To fix this, you MUST add high-quality, rotating proxies to the `get_proxies` function.")
+        print("="*50 + "\n")
 
     lock = threading.Lock()
     count = 0
