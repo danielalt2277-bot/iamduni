@@ -45,8 +45,10 @@ def get_proxies():
     Returns a list of proxies.
     IMPORTANT: The user must replace the placeholder proxies below with their own.
     """
-    # Replace with your residential proxies (e.g., from BrightData API)
-    return ["http://user:pass@proxy1.brightdata.com:22225", "http://user:pass@proxy2.brightdata.com:22225"]
+    # By default, this function returns an empty list.
+    # To use proxies, add them to the list below.
+    # Example: return ["http://user:pass@proxy1.brightdata.com:22225"]
+    return []
 
 def send_view(username, aweme_id, proxy=None):
     """
@@ -74,8 +76,10 @@ def send_view(username, aweme_id, proxy=None):
             stats_url = f"https://m.tiktok.com/aweme/v1/aweme/stats/?aweme_id={aweme_id}"
             session.get(stats_url, timeout_seconds=15)
             return True
-    except Exception:
-        pass
+        else:
+            print(f"[-] Request failed with status code {resp.status_code} for proxy {proxy or 'direct'}")
+    except Exception as e:
+        print(f"[-] An error occurred while sending a view with proxy {proxy or 'direct'}: {e}")
     return False
 
 def main():
@@ -92,6 +96,9 @@ def main():
         return
 
     proxies = get_proxies()
+    if not proxies:
+        print("[!] No proxies configured. The script will run without proxies.")
+        print("[!] This may lead to rate limiting or blocking from TikTok.")
 
     lock = threading.Lock()
     count = 0
@@ -103,6 +110,8 @@ def main():
             with lock:
                 count += 1
                 print(f"[+] View #{count}/{target} added via {proxy or 'direct'}")
+        else:
+            print(f"[-] Failed to send view using proxy {proxy or 'direct'}")
 
     threads = []
     while count < target:
