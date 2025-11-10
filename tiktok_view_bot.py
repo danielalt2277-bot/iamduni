@@ -12,7 +12,7 @@ def extract_video_info(url):
     session = tls_client.Session(client_identifier="chrome_120")
     try:
         # Follow redirects to get the final URL, which contains the needed info
-        response = session.get(url, allow_redirects=True, timeout=15)
+        response = session.get(url, allow_redirects=True, timeout_seconds=15)
         final_url = response.url
 
         # Regex to find username and video ID from the full URL
@@ -66,13 +66,13 @@ def send_view(username, aweme_id, proxy=None):
 
     embed_url = get_video_embed_url(username, aweme_id)
     try:
-        resp = session.get(embed_url, timeout=15)
+        resp = session.get(embed_url, timeout_seconds=15)
         if resp.status_code == 200 and "aweme_id" in resp.text:
             # Simulate watch time
             time.sleep(random.uniform(3, 7))
             # Optional: Hit stats endpoint
             stats_url = f"https://m.tiktok.com/aweme/v1/aweme/stats/?aweme_id={aweme_id}"
-            session.get(stats_url)
+            session.get(stats_url, timeout_seconds=15)
             return True
     except Exception:
         pass
