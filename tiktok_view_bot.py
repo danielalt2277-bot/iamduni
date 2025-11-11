@@ -6,23 +6,35 @@ import tls_client
 from playwright.async_api import async_playwright
 from urllib.parse import urlparse
 
-# --- Configuration ---
-PROXIES = []
+# --- Advanced Configuration ---
 
-# --- Logic ---
+# --- Proxies ---
+PROXIES = [
+    # "http://user:pass@proxy1.example.com:8080",
+]
+
+# --- Performance ---
+MAX_THREADS = 10
+
+# --- Behavior ---
+MIN_WATCH_TIME = 5
+MAX_WATCH_TIME = 12
+
+
+# --- Main Logic ---
 
 def send_view_http(session, url):
-    """(Method 1: Fast) Sends a view using a direct HTTP request."""
+    """(Tier 1: Fast) Sends a view using a direct HTTP request."""
     try:
         response = session.get(url, timeout_seconds=15)
         if response.status_code == 200 and "aweme_id" in response.text:
-            return True, "Fast"
+            return True, "Fast HTTP"
     except Exception as e:
-        print(f"[-] HTTP request failed: {e}")
-    return False, "Fast"
+        print(f"[-] Tier 1 (HTTP) failed: {e}")
+    return False, "Fast HTTP"
 
-async def send_view_playwright_async(url, proxy):
-    """(Method 2: Robust) Sends a view using a real browser."""
+async def send_view_playwright_desktop_async(url, proxy):
+    """(Tier 2: Desktop Browser) Sends a view using a desktop browser."""
     try:
         async with async_playwright() as p:
             browser_args = []
@@ -32,16 +44,48 @@ async def send_view_playwright_async(url, proxy):
             browser = await p.chromium.launch(headless=True, args=browser_args)
             page = await browser.new_page()
             await page.goto(url, timeout=60000)
-            await asyncio.sleep(random.uniform(5, 10))
-            await browser.close()
-            return True, "Robust"
-    except Exception as e:
-        print(f"[-] Playwright action failed: {e}")
-    return False, "Robust"
 
-def send_view_playwright(url, proxy):
-    """Synchronous wrapper for the async playwright function."""
-    return asyncio.run(send_view_playwright_async(url, proxy))
+            # Human-like behavior
+            await page.mouse.move(random.randint(0, 100), random.randint(0, 100))
+            await asyncio.sleep(random.uniform(1, 3))
+            await page.mouse.wheel(0, random.randint(100, 500))
+
+            await asyncio.sleep(random.uniform(MIN_WATCH_TIME, MAX_WATCH_TIME))
+            await browser.close()
+            return True, "Desktop Browser"
+    except Exception as e:
+        print(f"[-] Tier 2 (Desktop) failed: {e}")
+    return False, "Desktop Browser"
+
+def send_view_playwright_desktop(url, proxy):
+    return asyncio.run(send_view_playwright_desktop_async(url, proxy))
+
+async def send_view_playwright_mobile_async(url, proxy):
+    """(Tier 3: Mobile Browser) Sends a view using a mobile browser."""
+    try:
+        async with async_playwright() as p:
+            browser_args = []
+            if proxy:
+                browser_args.append(f"--proxy-server={proxy}")
+
+            browser = await p.webkit.launch(headless=True, args=browser_args)
+            context = await browser.new_context(**p.devices['iPhone 13'])
+            page = await context.new_page()
+            await page.goto(url, timeout=60000)
+
+            # Human-like behavior
+            await page.swipe(random.randint(100, 200), random.randint(300, 500), random.randint(100, 200), random.randint(0, 100), steps=random.randint(5, 10))
+
+            await asyncio.sleep(random.uniform(MIN_WATCH_TIME, MAX_WATCH_TIME))
+            await browser.close()
+            return True, "Mobile Browser"
+    except Exception as e:
+        print(f"[-] Tier 3 (Mobile) failed: {e}")
+    return False, "Mobile Browser"
+
+def send_view_playwright_mobile(url, proxy):
+    return asyncio.run(send_view_playwright_mobile_async(url, proxy))
+
 
 async def get_view_count_async(url):
     """Fetches the current view count of a video."""
@@ -63,11 +107,10 @@ async def get_view_count_async(url):
         print(f"\n[-] Could not fetch view count. Error: {e}\n")
 
 def get_view_count(url):
-    """Synchronous wrapper for the async get_view_count function."""
     asyncio.run(get_view_count_async(url))
 
 def worker(url, lock, success_counter):
-    """A worker thread that sends a single view."""
+    """A worker thread that sends a single view using a multi-layered approach."""
     proxy = random.choice(PROXIES) if PROXIES else None
 
     session = tls_client.Session(client_identifier="chrome_120")
@@ -77,13 +120,15 @@ def worker(url, lock, success_counter):
     success, method = send_view_http(session, url)
 
     if not success:
-        print("[-] Fast method failed. Falling back to robust browser-based method...")
-        success, method = send_view_playwright(url, proxy)
+        success, method = send_view_playwright_desktop(url, proxy)
+
+    if not success:
+        success, method = send_view_playwright_mobile(url, proxy)
 
     if success:
         with lock:
             success_counter['count'] += 1
-            print(f"[{success_counter['count']}] View sent successfully via {method} method (Proxy: {proxy or 'Direct'})")
+            print(f"[{success_counter['count']}] View sent successfully via {method} (Proxy: {proxy or 'Direct'})")
     else:
         print(f"[-] All methods failed for proxy: {proxy or 'Direct'}")
 
@@ -115,7 +160,10 @@ def main():
             t = threading.Thread(target=worker, args=(url, lock, success_counter))
             threads.append(t)
             t.start()
-            time.sleep(random.uniform(0.5, 1.5))
+            if len(threads) >= MAX_THREADS:
+                for thread in threads:
+                    thread.join()
+                threads = []
 
         for t in threads:
             t.join()
