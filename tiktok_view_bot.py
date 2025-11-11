@@ -2,20 +2,27 @@ import asyncio
 import random
 import time
 import threading
+import tls_client
 from playwright.async_api import async_playwright
+from urllib.parse import urlparse
 
-def get_proxies():
-    """
-    Returns a list of proxies.
-    IMPORTANT: The user must add their own proxies below.
-    Playwright format: "http://user:pass@host:port"
-    """
-    return []
+# --- Configuration ---
+PROXIES = []
 
-async def send_view(video_url, proxy=None):
-    """
-    Sends a view to the specified video using Playwright.
-    """
+# --- Logic ---
+
+def send_view_http(session, url):
+    """(Method 1: Fast) Sends a view using a direct HTTP request."""
+    try:
+        response = session.get(url, timeout_seconds=15)
+        if response.status_code == 200 and "aweme_id" in response.text:
+            return True, "Fast"
+    except Exception as e:
+        print(f"[-] HTTP request failed: {e}")
+    return False, "Fast"
+
+async def send_view_playwright_async(url, proxy):
+    """(Method 2: Robust) Sends a view using a real browser."""
     try:
         async with async_playwright() as p:
             browser_args = []
@@ -23,74 +30,107 @@ async def send_view(video_url, proxy=None):
                 browser_args.append(f"--proxy-server={proxy}")
 
             browser = await p.chromium.launch(headless=True, args=browser_args)
-            context = await browser.new_context()
-            page = await context.new_page()
-
-            await page.goto(video_url, timeout=60000)
-
-            # Simulate watch time
+            page = await browser.new_page()
+            await page.goto(url, timeout=60000)
             await asyncio.sleep(random.uniform(5, 10))
+            await browser.close()
+            return True, "Robust"
+    except Exception as e:
+        print(f"[-] Playwright action failed: {e}")
+    return False, "Robust"
+
+def send_view_playwright(url, proxy):
+    """Synchronous wrapper for the async playwright function."""
+    return asyncio.run(send_view_playwright_async(url, proxy))
+
+async def get_view_count_async(url):
+    """Fetches the current view count of a video."""
+    print("Fetching view count...")
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
+            await page.goto(url, timeout=60000)
+
+            selector = '[data-e2e="video-views"]'
+            views_element = await page.wait_for_selector(selector, timeout=30000)
+            views_text = await views_element.inner_text()
 
             await browser.close()
-            return True
+            print(f"\n[+] Current view count for {url}: {views_text}\n")
+
     except Exception as e:
-        print(f"[-] An error occurred while sending a view with proxy {proxy or 'direct'}: {e}")
-        return False
+        print(f"\n[-] Could not fetch view count. Error: {e}\n")
+
+def get_view_count(url):
+    """Synchronous wrapper for the async get_view_count function."""
+    asyncio.run(get_view_count_async(url))
+
+def worker(url, lock, success_counter):
+    """A worker thread that sends a single view."""
+    proxy = random.choice(PROXIES) if PROXIES else None
+
+    session = tls_client.Session(client_identifier="chrome_120")
+    if proxy:
+        session.proxies = {"http": proxy, "https": proxy}
+
+    success, method = send_view_http(session, url)
+
+    if not success:
+        print("[-] Fast method failed. Falling back to robust browser-based method...")
+        success, method = send_view_playwright(url, proxy)
+
+    if success:
+        with lock:
+            success_counter['count'] += 1
+            print(f"[{success_counter['count']}] View sent successfully via {method} method (Proxy: {proxy or 'Direct'})")
+    else:
+        print(f"[-] All methods failed for proxy: {proxy or 'Direct'}")
 
 def main():
-    url = input("Enter TikTok video URL: ").strip()
+    print("--- TikTok View Bot ---")
+    print("1: Send views to a video")
+    print("2: Check the view count of a video")
+    choice = input("Select an option (1 or 2): ").strip()
 
-    try:
-        target = int(input("How many views: "))
-    except ValueError:
-        print("Invalid number of views.")
-        return
+    if choice == '1':
+        url = input("Enter the TikTok video URL: ").strip()
+        try:
+            target = int(input("How many views to send: "))
+        except ValueError:
+            print("Invalid number. Please enter an integer.")
+            return
 
-    proxies = get_proxies()
-    if not proxies:
-        print("\n" + "="*50)
-        print("[WARNING] NO PROXIES CONFIGURED")
-        print("="*50)
-        print("The script is running without proxies. This sends all requests from your IP address.")
-        print("TikTok will quickly detect and block this, and the script will not work.")
-        print("To fix this, you MUST add high-quality, rotating proxies to the `get_proxies` function.")
-        print("="*50 + "\n")
+        if not PROXIES:
+            print("\n[WARNING] No proxies configured. Running in direct mode.\n")
 
-    lock = threading.Lock()
-    count = 0
+        print("\n--- Checking initial view count ---")
+        get_view_count(url)
 
-    def worker():
-        nonlocal count
-        proxy = random.choice(proxies) if proxies else None
+        success_counter = {'count': 0}
+        lock = threading.Lock()
 
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        if loop.run_until_complete(send_view(url, proxy)):
-            with lock:
-                count += 1
-                print(f"[+] View #{count}/{target} added via {proxy or 'direct'}")
-        else:
-            print(f"[-] Failed to send view using proxy {proxy or 'direct'}")
-
-    threads = []
-    while count < target:
-        # Create a burst of threads
-        for _ in range(min(10, target - count)):  # Reduced thread count for browser automation
-            t = threading.Thread(target=worker)
-            t.start()
+        threads = []
+        for _ in range(target):
+            t = threading.Thread(target=worker, args=(url, lock, success_counter))
             threads.append(t)
+            t.start()
+            time.sleep(random.uniform(0.5, 1.5))
 
-        # Wait for all threads in the burst to complete
         for t in threads:
             t.join()
 
-        threads = []
-        # Pause between bursts
-        time.sleep(random.uniform(5, 10))
+        print(f"\n--- Task Complete ---")
+        print(f"Successfully sent {success_counter['count']} out of {target} views.")
+        print("\n--- Checking final view count ---")
+        get_view_count(url)
 
-    print(f"\n[+] All {target} views have been dispatched.")
-    print("Please allow 5-10 minutes for the view count to update due to TikTok's caching.")
+    elif choice == '2':
+        url = input("Enter the TikTok video URL to check: ").strip()
+        get_view_count(url)
+
+    else:
+        print("Invalid option. Please restart and select 1 or 2.")
 
 if __name__ == "__main__":
     main()
