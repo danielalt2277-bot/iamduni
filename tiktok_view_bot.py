@@ -1,6 +1,6 @@
 # --- SETUP INSTRUCTIONS ---
 # 1. Install Dependencies:
-#    pip install tls_client playwright tf-playwright-stealth
+#    pip install tls_client playwright
 #
 # 2. Install Playwright Browsers:
 #    playwright install
@@ -11,7 +11,6 @@ import time
 import threading
 import tls_client
 from playwright.async_api import async_playwright
-from tf_playwright_stealth import stealth_async
 from urllib.parse import urlparse
 
 # --- Advanced Configuration ---
@@ -47,8 +46,8 @@ async def send_view_playwright_desktop_async(url, proxy):
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True, proxy={'server': proxy} if proxy else None)
-            page = await browser.new_page()
-            await stealth_async(page)
+            page = await browser.new_page(user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36')
+            await page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             for _ in range(VIEWS_PER_SESSION):
                 await page.goto(url, timeout=60000)
                 await page.mouse.move(random.randint(0, 100), random.randint(0, 100))
@@ -71,7 +70,7 @@ async def send_view_playwright_mobile_async(url, proxy):
             browser = await p.webkit.launch(headless=True, proxy={'server': proxy} if proxy else None)
             context = await browser.new_context(**p.devices['iPhone 13'])
             page = await context.new_page()
-            await stealth_async(page)
+            await page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             for _ in range(VIEWS_PER_SESSION):
                 await page.goto(url, timeout=60000)
                 await page.swipe(random.randint(100, 200), random.randint(300, 500), random.randint(100, 200), random.randint(0, 100), steps=random.randint(5, 10))
@@ -92,8 +91,8 @@ async def get_view_count_async(url):
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
-            await stealth_async(page)
+            page = await browser.new_page(user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36')
+            await page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             await page.goto(url, timeout=60000)
 
             selector = '[data-e2e="video-views"]'
@@ -115,8 +114,8 @@ async def test_fingerprint_async():
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
-            await stealth_async(page)
+            page = await browser.new_page(user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36')
+            await page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             await page.goto("https://bot.sannysoft.com", timeout=60000)
             await page.screenshot(path="fingerprint_test_results.png", full_page=True)
             print("Browser fingerprint test complete. Results saved to 'fingerprint_test_results.png'")
