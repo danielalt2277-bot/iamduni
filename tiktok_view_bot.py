@@ -1,48 +1,9 @@
-import sys
-import subprocess
-import pkg_resources
-
-# --- Auto-Installer for Dependencies ---
-REQUIRED_PACKAGES = {
-    'tls-client': 'tls_client',
-    'playwright': 'playwright',
-    'tf-playwright-stealth': 'tf_playwright_stealth'
-}
-
-def install_packages():
-    installed = {pkg.key for pkg in pkg_resources.working_set}
-    missing = [install_name for install_name, import_name in REQUIRED_PACKAGES.items() if import_name not in installed]
-
-    if missing:
-        print("--- Missing Dependencies Detected ---")
-        print(f"The following required libraries are not installed: {', '.join(missing)}")
-        print("Attempting to automatically install them now...")
-
-        try:
-            for package in missing:
-                print(f"Installing {package}...")
-                subprocess.check_call([sys.executable, '-m', 'pip', 'install', package])
-
-            print("\n--- Dependencies Installed Successfully ---")
-            print("Playwright also needs to download its browsers.")
-            print("Attempting to do that now (this may take a moment)...")
-
-            subprocess.check_call([sys.executable, '-m', 'playwright', 'install'])
-
-            print("\n--- Setup Complete! ---")
-            print("Please run the script again to start the bot.")
-            sys.exit(0) # Exit after setup to ensure new libraries are loaded correctly
-
-        except Exception as e:
-            print("\n--- Automatic Installation Failed ---")
-            print(f"An error occurred: {e}")
-            print("Please try installing the dependencies manually by running:")
-            print("pip install tls-client playwright tf-playwright-stealth")
-            print("playwright install")
-            sys.exit(1)
-
-install_packages()
-
+# --- SETUP INSTRUCTIONS ---
+# 1. Install Dependencies:
+#    pip install tls_client playwright tf-playwright-stealth
+#
+# 2. Install Playwright Browsers:
+#    playwright install
 
 import asyncio
 import random
