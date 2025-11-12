@@ -1,10 +1,17 @@
+# --- SETUP INSTRUCTIONS ---
+# 1. Install the required Python libraries:
+#    pip install -r requirements.txt
+#
+# 2. Install the Playwright browsers:
+#    playwright install
+
 import asyncio
 import random
 import time
 import threading
 import tls_client
 from playwright.async_api import async_playwright
-from playwright_stealth import stealth_async
+from tf_playwright_stealth import stealth_async
 from urllib.parse import urlparse
 
 # --- Advanced Configuration ---
@@ -39,11 +46,7 @@ async def send_view_playwright_desktop_async(url, proxy):
     """(Tier 2: Desktop Browser) Sends a view using a desktop browser."""
     try:
         async with async_playwright() as p:
-            browser_args = []
-            if proxy:
-                browser_args.append(f"--proxy-server={proxy}")
-
-            browser = await p.chromium.launch(headless=True, args=browser_args)
+            browser = await p.chromium.launch(headless=True, proxy={'server': proxy} if proxy else None)
             page = await browser.new_page()
             await stealth_async(page)
             for _ in range(VIEWS_PER_SESSION):
@@ -65,11 +68,7 @@ async def send_view_playwright_mobile_async(url, proxy):
     """(Tier 3: Mobile Browser) Sends a view using a mobile browser."""
     try:
         async with async_playwright() as p:
-            browser_args = []
-            if proxy:
-                browser_args.append(f"--proxy-server={proxy}")
-
-            browser = await p.webkit.launch(headless=True, args=browser_args)
+            browser = await p.webkit.launch(headless=True, proxy={'server': proxy} if proxy else None)
             context = await browser.new_context(**p.devices['iPhone 13'])
             page = await context.new_page()
             await stealth_async(page)
@@ -115,12 +114,12 @@ async def test_fingerprint_async():
     print("Testing browser fingerprint...")
     try:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=False)
+            browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
             await stealth_async(page)
             await page.goto("https://bot.sannysoft.com", timeout=60000)
-            print("Browser fingerprint test complete. Check the browser window for results.")
-            await asyncio.sleep(30)
+            await page.screenshot(path="fingerprint_test_results.png", full_page=True)
+            print("Browser fingerprint test complete. Results saved to 'fingerprint_test_results.png'")
             await browser.close()
     except Exception as e:
         print(f"[-] Fingerprint test failed: {e}")
