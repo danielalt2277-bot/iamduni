@@ -4,6 +4,7 @@ import time
 import threading
 import tls_client
 from playwright.async_api import async_playwright
+from playwright_stealth import stealth_async
 from urllib.parse import urlparse
 
 # --- Advanced Configuration ---
@@ -19,6 +20,7 @@ MAX_THREADS = 10
 # --- Behavior ---
 MIN_WATCH_TIME = 5
 MAX_WATCH_TIME = 12
+VIEWS_PER_SESSION = 5
 
 
 # --- Main Logic ---
@@ -43,14 +45,13 @@ async def send_view_playwright_desktop_async(url, proxy):
 
             browser = await p.chromium.launch(headless=True, args=browser_args)
             page = await browser.new_page()
-            await page.goto(url, timeout=60000)
-
-            # Human-like behavior
-            await page.mouse.move(random.randint(0, 100), random.randint(0, 100))
-            await asyncio.sleep(random.uniform(1, 3))
-            await page.mouse.wheel(0, random.randint(100, 500))
-
-            await asyncio.sleep(random.uniform(MIN_WATCH_TIME, MAX_WATCH_TIME))
+            await stealth_async(page)
+            for _ in range(VIEWS_PER_SESSION):
+                await page.goto(url, timeout=60000)
+                await page.mouse.move(random.randint(0, 100), random.randint(0, 100))
+                await asyncio.sleep(random.uniform(1, 3))
+                await page.mouse.wheel(0, random.randint(100, 500))
+                await asyncio.sleep(random.uniform(MIN_WATCH_TIME, MAX_WATCH_TIME))
             await browser.close()
             return True, "Desktop Browser"
     except Exception as e:
@@ -71,12 +72,11 @@ async def send_view_playwright_mobile_async(url, proxy):
             browser = await p.webkit.launch(headless=True, args=browser_args)
             context = await browser.new_context(**p.devices['iPhone 13'])
             page = await context.new_page()
-            await page.goto(url, timeout=60000)
-
-            # Human-like behavior
-            await page.swipe(random.randint(100, 200), random.randint(300, 500), random.randint(100, 200), random.randint(0, 100), steps=random.randint(5, 10))
-
-            await asyncio.sleep(random.uniform(MIN_WATCH_TIME, MAX_WATCH_TIME))
+            await stealth_async(page)
+            for _ in range(VIEWS_PER_SESSION):
+                await page.goto(url, timeout=60000)
+                await page.swipe(random.randint(100, 200), random.randint(300, 500), random.randint(100, 200), random.randint(0, 100), steps=random.randint(5, 10))
+                await asyncio.sleep(random.uniform(MIN_WATCH_TIME, MAX_WATCH_TIME))
             await browser.close()
             return True, "Mobile Browser"
     except Exception as e:
@@ -94,6 +94,7 @@ async def get_view_count_async(url):
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
+            await stealth_async(page)
             await page.goto(url, timeout=60000)
 
             selector = '[data-e2e="video-views"]'
@@ -108,6 +109,25 @@ async def get_view_count_async(url):
 
 def get_view_count(url):
     asyncio.run(get_view_count_async(url))
+
+async def test_fingerprint_async():
+    """Tests the browser's stealthiness against a detection website."""
+    print("Testing browser fingerprint...")
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=False)
+            page = await browser.new_page()
+            await stealth_async(page)
+            await page.goto("https://bot.sannysoft.com", timeout=60000)
+            print("Browser fingerprint test complete. Check the browser window for results.")
+            await asyncio.sleep(30)
+            await browser.close()
+    except Exception as e:
+        print(f"[-] Fingerprint test failed: {e}")
+
+def test_fingerprint():
+    asyncio.run(test_fingerprint_async())
+
 
 def worker(url, lock, success_counter):
     """A worker thread that sends a single view using a multi-layered approach."""
@@ -127,8 +147,8 @@ def worker(url, lock, success_counter):
 
     if success:
         with lock:
-            success_counter['count'] += 1
-            print(f"[{success_counter['count']}] View sent successfully via {method} (Proxy: {proxy or 'Direct'})")
+            success_counter['count'] += VIEWS_PER_SESSION if "Browser" in method else 1
+            print(f"[{success_counter['count']}] Views sent successfully via {method} (Proxy: {proxy or 'Direct'})")
     else:
         print(f"[-] All methods failed for proxy: {proxy or 'Direct'}")
 
@@ -136,7 +156,8 @@ def main():
     print("--- TikTok View Bot ---")
     print("1: Send views to a video")
     print("2: Check the view count of a video")
-    choice = input("Select an option (1 or 2): ").strip()
+    print("3: Test browser fingerprint")
+    choice = input("Select an option (1, 2, or 3): ").strip()
 
     if choice == '1':
         url = input("Enter the TikTok video URL: ").strip()
@@ -156,7 +177,7 @@ def main():
         lock = threading.Lock()
 
         threads = []
-        for _ in range(target):
+        while success_counter['count'] < target:
             t = threading.Thread(target=worker, args=(url, lock, success_counter))
             threads.append(t)
             t.start()
@@ -177,8 +198,11 @@ def main():
         url = input("Enter the TikTok video URL to check: ").strip()
         get_view_count(url)
 
+    elif choice == '3':
+        test_fingerprint()
+
     else:
-        print("Invalid option. Please restart and select 1 or 2.")
+        print("Invalid option. Please restart and select 1, 2, or 3.")
 
 if __name__ == "__main__":
     main()
